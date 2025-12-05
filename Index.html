@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ProblemHub – Anonymous Social App</title>
+
+<style>
+    body {
+        margin:0;
+        font-family:Arial, sans-serif;
+        background:#f4f4f4;
+        transition:0.3s;
+    }
+    body.dark {
+        background:#111;
+        color:white;
+    }
+    header {
+        background:#4c6ef5;
+        padding:20px;
+        color:white;
+        text-align:center;
+        font-size:26px;
+        font-weight:bold;
+        box-shadow:0 2px 10px rgba(0,0,0,0.3);
+    }
+    .container {
+        max-width:700px;
+        margin:20px auto;
+        padding:15px;
+    }
+    .card {
+        background:white;
+        padding:15px;
+        margin-bottom:15px;
+        border-radius:15px;
+        box-shadow:0 3px 10px rgba(0,0,0,0.1);
+        animation:pop 0.3s ease;
+    }
+    body.dark .card {
+        background:#222;
+        color:white;
+    }
+    @keyframes pop {
+        0% { transform:scale(0.95); opacity:0; }
+        100% { transform:scale(1); opacity:1; }
+    }
+    textarea, select {
+        width:100%;
+        padding:10px;
+        border-radius:10px;
+        border:1px solid #ccc;
+        margin-bottom:10px;
+    }
+    body.dark textarea, body.dark select {
+        background:#333;
+        color:white;
+        border:1px solid #555;
+    }
+    button {
+        background:#4c6ef5;
+        color:white;
+        padding:10px 16px;
+        border:none;
+        border-radius:10px;
+        cursor:pointer;
+        font-size:16px;
+        font-weight:bold;
+        transition:0.2s;
+    }
+    button:hover { opacity:0.85; }
+    .upvote {
+        cursor:pointer;
+        color:#4c6ef5;
+        font-weight:bold;
+        margin-top:5px;
+    }
+    .reply-box {
+        margin-top:10px;
+    }
+    .dark-mode-btn {
+        position:fixed;
+        right:20px;
+        bottom:20px;
+        padding:10px 14px;
+        background:black;
+        color:white;
+        border-radius:50px;
+        cursor:pointer;
+        font-weight:bold;
+        box-shadow:0 3px 10px rgba(0,0,0,0.5);
+    }
+    .tag {
+        background:#eef;
+        padding:4px 10px;
+        border-radius:6px;
+        font-size:13px;
+        display:inline-block;
+        margin-bottom:8px;
+        color:#333;
+    }
+    body.dark .tag {
+        background:#333;
+        color:white;
+    }
+    .notify {
+        position:fixed;
+        top:-80px;
+        left:50%;
+        transform:translateX(-50%);
+        background:#4c6ef5;
+        color:white;
+        padding:12px 20px;
+        border-radius:10px;
+        font-weight:bold;
+        transition:0.4s;
+    }
+    .notify.show { top:20px; }
+</style>
+
+</head>
+<body>
+
+<header>ProblemHub • Anonymous Help Community</header>
+
+<div class="notify" id="notify">Done!</div>
+
+<div class="container">
+
+    <div class="card">
+        <h2>Post a Problem</h2>
+
+        <select id="category">
+            <option>School</option>
+            <option>Relationship</option>
+            <option>Mental Health</option>
+            <option>Career</option>
+            <option>Other</option>
+        </select>
+
+        <textarea id="problem" placeholder="What's bothering you? Describe your problem..."></textarea>
+        <button onclick="createPost()">Post</button>
+    </div>
+
+    <h2>All Problems</h2>
+    <div id="feed"></div>
+</div>
+
+<div class="dark-mode-btn" onclick="toggleDark()">🌙</div>
+
+<script>
+const API_URL = "https://api.npoint.io/4f8e829b5bfeef20ce3c";
+
+// RANDOM anonymous usernames
+const users = ["Fox123", "BlueSky", "ShadowWolf", "Sunrise", "RiverStone", "NightOwl", "StarDrop"];
+function randomUser() {
+    return users[Math.floor(Math.random()*users.length)];
+}
+
+// Notification popup
+function notify(msg) {
+    const box = document.getElementById("notify");
+    box.innerText = msg;
+    box.classList.add("show");
+    setTimeout(() => box.classList.remove("show"), 2000);
+}
+
+async function loadPosts() {
+    const res = await fetch(API_URL);
+    let data = await res.json();
+    feed.innerHTML = "";
+
+    data.posts.reverse().forEach((p, i) => {
+        feed.innerHTML += `
+            <div class="card">
+                <div class="tag">${p.category}</div>
+                <p><b>@${p.user}</b></p>
+                <p>${p.text}</p>
+                <p class="upvote" onclick="upvote(${data.posts.length - 1 - i})">⬆ ${p.votes} Upvotes</p>
+
+                <h4>Replies</h4>
+                ${p.replies.map(r => `<div class='card reply'>@${r.user}: ${r.text}</div>`).join("")}
+
+                <div class="reply-box">
+                    <textarea id="reply${data.posts.length - 1 - i}" placeholder="Reply anonymously"></textarea>
+                    <button onclick="addReply(${data.posts.length - 1 - i})">Reply</button>
+                </div>
+            </div>`;
+    });
+}
+
+async function savePosts(data) {
+    await fetch(API_URL, {
+        method:"PUT",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify(data)
+    });
+}
+
+async function createPost() {
+    const text = problem.value.trim();
+    const category = document.getElementById("category").value;
+    if(!text) return notify("Write something first!");
+
+    const res = await fetch(API_URL);
+    let data = await res.json();
+
+    data.posts.push({
+        text,
+        category,
+        user: randomUser(),
+        votes:0,
+        replies:[]
+    });
+
+    await savePosts(data);
+    problem.value = "";
+    notify("Posted!");
+    loadPosts();
+}
+
+async function addReply(i) {
+    const replyText = document.getElementById("reply"+i).value.trim();
+    if(!replyText) return notify("Write a reply!");
+
+    const res = await fetch(API_URL);
+    let data = await res.json();
+
+    data.posts[i].replies.push({
+        text: replyText,
+        user: randomUser()
+    });
+
+    await savePosts(data);
+    notify("Reply added!");
+    loadPosts();
+}
+
+async function upvote(i) {
+    const res = await fetch(API_URL);
+    let data = await res.json();
+
+    data.posts[i].votes++;
+
+    await savePosts(data);
+    loadPosts();
+}
+
+function toggleDark() { document.body.classList.toggle("dark"); }
+
+loadPosts();
+</script>
+
+</body>
+</html>￼Enter
